@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .upload-form {
+            margin: 20px 0;
+            padding: 20px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .upload-form.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 400px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .result {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .file-list {
+            margin: 20px 0;
+        }
+        .file-item {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        .file-item a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .file-item a:hover {
+            text-decoration: underline;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: #000;
+        }
+        .details-section {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .details-section h4 {
+            margin-top: 0;
+            color: #333;
+        }
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-completed { background-color: #d4edda; color: #155724; }
+        .status-processing { background-color: #fff3cd; color: #856404; }
+        .status-pending { background-color: #f8d7da; color: #721c24; }
+        .status-failed { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Home Inspection API - File Upload Test</h1>
+        
+        <div class="upload-form" id="uploadForm">
+            <h3>Upload File</h3>
+            <p>Allowed file types: PDF, DOC, DOCX (Max size: 10MB)</p>
+            <input type="file" id="fileInput" accept=".pdf,.doc,.docx" />
+            <br>
+            <button onclick="uploadFile()" id="uploadBtn">Upload File</button>
+            <button onclick="loadFiles()">Refresh File List</button>
+        </div>
+
+        <div id="result"></div>
+
+        <div class="file-list">
+            <h3>Uploaded Files</h3>
+            <div id="fileList">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Modal for file details -->
+    <div id="detailsModal" class="modal">
+        <div class="modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 id="modalTitle">File Details</h2>
+                <div>
+                    <button onclick="refreshFileDetails()" id="refreshBtn" style="margin-right: 10px;">Refresh</button>
+                    <span class="close" onclick="closeModal()">&times;</span>
+                </div>
+            </div>
+            <div id="modalContent">Loading...</div>
+        </div>
+    </div>
+
+    <script>
+        // Global variable to store current file ID for refresh functionality
+        let currentFileId = null;
+        
+        // Load files on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadFiles();
+            
+            // Check if there's a file parameter in the URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const fileId = urlParams.get('file');
+            if (fileId) {
+                // Automatically show details for the specified file
+                setTimeout(() => viewDetails(fileId), 1000);
+            }
+        });
+
+        // Drag and drop functionality
+        const uploadForm = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadForm.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadForm.classList.add('dragover');
+        });
+
+        uploadForm.addEventListener('dragleave', () => {
+            uploadForm.classList.remove('dragover');
+        });
+
+        uploadForm.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadForm.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+            }
+        });
+
+        async function refreshFileDetails() {
+            if (currentFileId) {
+                await viewDetails(currentFileId);
+            }
+        }
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const resultDiv = document.getElementById('result');
+
+            if (!fileInput.files[0]) {
+                showResult('Please select a file to upload.', 'error');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = 'Uploading...';
+
+            try {
+                const response = await fetch('/api/v1/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showResult(`File uploaded successfully!\nFile ID: ${result.data.id}\nOriginal Name: ${result.data.original_filename}\nSize: ${result.data.size} bytes`, 'success');
+                    fileInput.value = '';
+                    loadFiles(); // Refresh file list
+                } else {
+                    showResult(`Upload failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showResult(`Upload error: ${error.message}`, 'error');
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = 'Upload File';
+            }
+        }
+
+        async function loadFiles() {
+            const fileListDiv = document.getElementById('fileList');
+            
+            try {
+                const response = await fetch('/api/v1/files');
+                const result = await response.json();
+
+                if (result.success) {
+                    if (result.data.length === 0) {
+                        fileListDiv.innerHTML = '<p>No files uploaded yet.</p>';
+                    } else {
+                        const filesHtml = result.data.map(file => `
+                            <div class="file-item">
+                                <strong>${file.original_filename}</strong><br>
+                                <small>ID: ${file.id} | Size: ${file.size} bytes | Type: ${file.mime_type}</small><br>
+                                <small>Uploaded: ${new Date(file.created_at).toLocaleString()}</small><br>
+                                <small>Status: <span class="status-badge status-${(file.processing_status || 'pending').toLowerCase()}">${file.processing_status || 'pending'}</span></small><br>
+                                <small>AI Status: <span class="status-badge status-${(file.ai_status || 'pending').toLowerCase()}">${file.ai_status || 'pending'}</span></small><br>
+                                <a href="/api/v1/upload/${file.id}/download" target="_blank">Download</a> | 
+                                <a href="#" onclick="viewDetails('${file.id}')">View Details</a>
+                            </div>
+                        `).join('');
+                        fileListDiv.innerHTML = filesHtml;
+                    }
+                } else {
+                    fileListDiv.innerHTML = `<p>Error loading files: ${result.error}</p>`;
+                }
+            } catch (error) {
+                fileListDiv.innerHTML = `<p>Error loading files: ${error.message}</p>`;
+            }
+        }
+
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = `result ${type}`;
+            resultDiv.textContent = message;
+        }
+
+        async function viewDetails(fileId) {
+            currentFileId = fileId; // Set the global variable
+            const modal = document.getElementById('detailsModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalContent = document.getElementById('modalContent');
+            
+            modal.style.display = 'block';
+            modalContent.innerHTML = 'Loading...';
+            
+            try {
+                // Get file details
+                const fileResponse = await fetch(`/api/v1/files/${fileId}`);
+                const fileResult = await fileResponse.json();
+                
+                if (!fileResult.success) {
+                    modalContent.innerHTML = `<p>Error loading file details: ${fileResult.error}</p>`;
+                    return;
+                }
+                
+                const file = fileResult.data;
+                modalTitle.textContent = `Details: ${file.original_filename}`;
+                
+                // Get file text and AI data
+                const textResponse = await fetch(`/api/v1/status/${fileId}/text`);
+                const textResult = await textResponse.json();
+                
+                let detailsHtml = `
+                    <div class="details-section">
+                        <h4>File Information</h4>
+                        <p><strong>ID:</strong> ${file.id}</p>
+                        <p><strong>Original Name:</strong> ${file.original_filename}</p>
+                        <p><strong>Size:</strong> ${file.size} bytes</p>
+                        <p><strong>Type:</strong> ${file.mime_type}</p>
+                        <p><strong>Uploaded:</strong> ${new Date(file.created_at).toLocaleString()}</p>
+                        <p><strong>Processing Status:</strong> <span class="status-badge status-${(file.processing_status || 'pending').toLowerCase()}">${file.processing_status || 'pending'}</span></p>
+                        <p><strong>AI Status:</strong> <span class="status-badge status-${(file.ai_status || 'pending').toLowerCase()}">${file.ai_status || 'pending'}</span></p>
+                    </div>
+                `;
+                
+                if (textResult.success && textResult.data.text) {
+                    detailsHtml += `
+                        <div class="details-section">
+                            <h4>Extracted Text</h4>
+                            <div style="max-height: 200px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 4px;">
+                                <pre style="white-space: pre-wrap; margin: 0;">${textResult.data.text}</pre>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                if (textResult.success && textResult.data.ai_summary) {
+                    detailsHtml += `
+                        <div class="details-section">
+                            <h4>AI Summary</h4>
+                            <div style="background-color: #e7f3ff; padding: 10px; border-radius: 4px;">
+                                <p>${textResult.data.ai_summary}</p>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                if (textResult.success && textResult.data.ai_recommendations) {
+                    detailsHtml += `
+                        <div class="details-section">
+                            <h4>AI Recommendations</h4>
+                            <div style="background-color: #fff3cd; padding: 10px; border-radius: 4px;">
+                                <p>${textResult.data.ai_recommendations}</p>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                if (!textResult.success || (!textResult.data.text && !textResult.data.ai_summary)) {
+                    detailsHtml += `
+                        <div class="details-section">
+                            <h4>Processing Status</h4>
+                            <p>Text extraction and AI processing are still in progress or have failed.</p>
+                            <p>Check the queue monitor for more detailed status information.</p>
+                            <button onclick="viewDetails('${fileId}')" style="margin-top: 10px;">Refresh Status</button>
+                        </div>
+                    `;
+                }
+                
+                modalContent.innerHTML = detailsHtml;
+                
+            } catch (error) {
+                modalContent.innerHTML = `<p>Error loading details: ${error.message}</p>`;
+            }
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('detailsModal');
+            modal.style.display = 'none';
+        }
+
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const modal = document.getElementById('detailsModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html> 
