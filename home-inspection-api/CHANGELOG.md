@@ -2,6 +2,111 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2025-07-29
+
+### Added
+- **Token Estimation System**: Comprehensive token estimation for AI processing
+  - Enhanced token estimation algorithm (word-based + character-based)
+  - Token cost calculation for different AI models
+  - Database fields for storing token estimates and costs
+  - Token analysis endpoints for batch processing
+  - Token statistics and distribution analysis
+- **AI Prompt Management System**: Version-controlled prompt management
+  - Multiple prompt versions (V1, V1.1, etc.)
+  - Custom prompt creation and management
+  - Prompt version switching via API
+  - Prompt statistics and usage tracking
+  - Dynamic prompt formatting with text injection
+- **Enhanced AI Processing**: Improved AI integration with better error handling
+  - Combined summary and recommendations processing
+  - AI status tracking (pending, processing, completed, failed)
+  - AI processing cost tracking in cents
+  - AI processing timestamp tracking
+  - Enhanced error handling for AI failures
+- **Frontend Token Display**: Token information in React frontend
+  - Token count display next to "Extracted Text" heading
+  - Estimated tokens and cost in file information section
+  - Token formatting utilities (k tokens, cost formatting)
+  - Conditional display based on token availability
+- **Database Schema Enhancements**:
+  - `estimated_tokens` (INTEGER) - Token count for AI processing
+  - `estimated_cost_cents` (INTEGER) - Estimated cost in cents
+  - `ai_status` (VARCHAR) - AI processing status
+  - `ai_summary` (TEXT) - AI-generated summary
+  - `ai_recommendations` (TEXT) - AI-generated recommendations
+  - `ai_processed_at` (TIMESTAMP) - AI processing timestamp
+  - Indexes for token and AI status queries
+- **New API Endpoints**:
+  - `POST /api/v1/ai/estimate-tokens-enhanced` - Enhanced token estimation
+  - `GET /api/v1/ai/analyze-file/:fileId` - File token analysis
+  - `POST /api/v1/ai/analyze-batch` - Batch token analysis
+  - `GET /api/v1/ai/token-stats` - Token statistics
+  - `GET /api/v1/ai/prompts` - Get current prompts
+  - `GET /api/v1/ai/prompts/:version` - Get specific prompt version
+  - `GET /api/v1/ai/prompts/versions/available` - List available versions
+  - `POST /api/v1/ai/prompts/version` - Set prompt version
+  - `POST /api/v1/ai/prompts/custom` - Create custom prompt
+  - `GET /api/v1/ai/prompts/custom` - List custom prompts
+  - `DELETE /api/v1/ai/prompts/custom/:name` - Delete custom prompt
+- **Worker Process Enhancements**:
+  - Token estimation during text extraction
+  - AI processing with prompt management
+  - Enhanced error handling for PDF parsing
+  - Token and cost tracking in job results
+- **Testing and Validation**:
+  - `test-token-estimation.sh` - Comprehensive token estimation tests
+  - `test-prompt-management.sh` - Prompt management system tests
+  - `update-existing-tokens.js` - Backfill script for existing files
+  - Enhanced error handling for corrupted PDFs
+
+### Technical Improvements
+- **Token Estimation Algorithm**: 
+  - Word-based estimation (1 token ≈ 0.75 words)
+  - Character-based estimation (1 token ≈ 4 characters)
+  - Weighted combination for accuracy
+  - Cost calculation for gpt-3.5-turbo model
+- **Prompt Management**:
+  - Singleton pattern for prompt manager
+  - Version control with semantic versioning
+  - Custom prompt storage and retrieval
+  - Dynamic prompt formatting
+- **Database Optimization**:
+  - New indexes for token and AI status queries
+  - Efficient token statistics queries
+  - Batch processing capabilities
+- **Error Handling**:
+  - Enhanced PDF parsing error handling
+  - Graceful degradation for corrupted files
+  - Detailed error messages for debugging
+- **Performance**:
+  - Efficient token estimation
+  - Optimized database queries
+  - Background processing improvements
+
+### Frontend Enhancements
+- **Token Display**: Real-time token count and cost display
+- **AI Status**: Visual indicators for AI processing status
+- **Enhanced File Details**: Comprehensive file information display
+- **Responsive Design**: Improved mobile and desktop experience
+- **Error Handling**: Better error messages and recovery
+
+### Dependencies
+- No new dependencies added (uses existing OpenAI and database infrastructure)
+
+### Migration Notes
+- Database migration required for new token and AI fields
+- Existing files need token estimation backfill (use `update-existing-tokens.js`)
+- Prompt management system is backward compatible
+- Frontend requires rebuild for new token display features
+
+### Configuration
+- Token estimation can be configured via environment variables
+- Prompt versions can be managed via API endpoints
+- AI model and cost settings are configurable
+- Processing limits and thresholds are adjustable
+
+## [0.4.0] - 2025-07-22
+
 ## [0.3.0] - 2025-07-22
 
 ### Added

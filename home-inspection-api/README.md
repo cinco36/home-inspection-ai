@@ -9,9 +9,13 @@ A robust Node.js/Express API server with TypeScript support, PostgreSQL database
 - **Redis Queue System**: Background job processing with Bull queue
 - **PDF Text Extraction**: Automatic text extraction from uploaded PDFs
 - **Processing Status Tracking**: Real-time status updates for file processing
+- **AI Integration**: OpenAI-powered text analysis with summary and recommendations
+- **Token Estimation**: Advanced token estimation for AI processing cost tracking
+- **Prompt Management**: Version-controlled AI prompt management system
 - **TypeScript**: Complete TypeScript implementation with strict typing
 - **File Validation**: Content-based validation using file-type library
 - **Web Interface**: HTML upload form with drag & drop support
+- **React Frontend**: Modern React-based file management interface
 - **Queue Monitoring**: Real-time queue monitoring dashboard with job management
 - **Manual Retry**: Ability to retry failed jobs and promote pending jobs
 - **Docker Support**: PostgreSQL and Redis container setup
@@ -77,6 +81,21 @@ The API will be available at `http://localhost:3000`
 - `POST /api/v1/queue/jobs/:id/retry` - Retry failed or promote pending jobs
 - `GET /api/v1/queue/stats` - Get performance metrics
 
+### AI Processing
+- `POST /api/v1/ai/estimate-tokens-enhanced` - Enhanced token estimation
+- `GET /api/v1/ai/analyze-file/:fileId` - File token analysis
+- `POST /api/v1/ai/analyze-batch` - Batch token analysis
+- `GET /api/v1/ai/token-stats` - Token statistics
+
+### Prompt Management
+- `GET /api/v1/ai/prompts` - Get current prompts
+- `GET /api/v1/ai/prompts/:version` - Get specific prompt version
+- `GET /api/v1/ai/prompts/versions/available` - List available versions
+- `POST /api/v1/ai/prompts/version` - Set prompt version
+- `POST /api/v1/ai/prompts/custom` - Create custom prompt
+- `GET /api/v1/ai/prompts/custom` - List custom prompts
+- `DELETE /api/v1/ai/prompts/custom/:name` - Delete custom prompt
+
 ## File Upload
 
 ### Supported File Types
@@ -91,6 +110,9 @@ Visit `http://localhost:3000/upload.html` for a user-friendly upload interface.
 
 ### Queue Monitoring
 Visit `http://localhost:3000/queue-monitor.html` for real-time queue monitoring with retry functionality.
+
+### React Frontend
+Visit `http://localhost:3000/react/` for the modern React-based file management interface with token display and AI status tracking.
 
 ### Upload via API
 ```bash

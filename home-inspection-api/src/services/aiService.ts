@@ -1,6 +1,8 @@
 import OpenAI from 'openai';
 import { Pool } from 'pg';
 import pool from '../database/connection';
+import { promptManager } from "../config/prompts";
+import fileService from './fileService';
 
 // AI Service Configuration
 interface AIConfig {
@@ -170,29 +172,12 @@ class AIService {
         ? extractedText.substring(0, maxTextLength) + '\n\n[Text truncated for analysis - full report available in original file]'
         : extractedText;
 
-      // Create a comprehensive prompt for home inspection analysis
-      const prompt = `You are an expert home inspector analyzing a home inspection report. Please provide:
 
-1. A concise summary of the key findings (2-3 paragraphs)
-2. Specific recommendations for addressing any issues found (bullet points)
-
-Focus on:
-- Safety concerns
-- Structural issues
-- Major repairs needed
-- Maintenance recommendations
-- Cost implications
-
-Format your response as:
-SUMMARY:
-[Your summary here]
-
-RECOMMENDATIONS:
-- [Recommendation 1]
-- [Recommendation 2]
-- [etc.]`;
-
-      // Process the text with AI
+      // Get the current combined prompt from the prompt management system
+      const currentPrompts = promptManager.getCurrentPrompts();
+      const prompt = promptManager.formatPrompt(currentPrompts.combined.prompt, truncatedText);
+      
+      console.log(`🤖 Using prompt version: ${currentPrompts.combined.version} for file: ${fileId}`);
       const aiResponse = await this.processText(prompt, truncatedText, fileId, {
         requestType: 'home_inspection_analysis',
         maxTokens: this.config.maxTokens, // Use config maxTokens instead of hardcoded 2000
@@ -265,6 +250,188 @@ RECOMMENDATIONS:
   estimateTokens(text: string): number {
     // Rough estimation: 1 token ≈ 4 characters for English text
     return Math.ceil(text.length / 4);
+  }
+
+  /**
+   * Enhanced token estimation that's closer to OpenAI's actual tokenization
+   */
+  estimateTokensEnhanced(text: string): {
+    estimatedTokens: number;
+    textLength: number;
+    wordCount: number;
+    characterCount: number;
+    estimatedCostCents: number;
+    model: string;
+  } {
+    // More accurate token estimation based on OpenAI's tokenizer patterns
+    const words = text.trim().split(/\s+/).length;
+    const characters = text.length;
+    
+    // OpenAI's tokenization is roughly:
+    // - 1 token ≈ 0.75 words (for English text)
+    // - 1 token ≈ 4 characters (for mixed content)
+    // - Special characters and punctuation count more
+    
+    // Calculate tokens using multiple methods and average them
+    const wordBasedTokens = Math.ceil(words / 0.75);
+    const charBasedTokens = Math.ceil(characters / 4);
+    
+    // Weight the estimation (words are more accurate for English text)
+    const estimatedTokens = Math.ceil((wordBasedTokens * 0.7) + (charBasedTokens * 0.3));
+    
+    const config = this.getConfig();
+    const estimatedCostCents = this.calculateCost(estimatedTokens, config.model);
+    
+    return {
+      estimatedTokens,
+      textLength: characters,
+      wordCount: words,
+      characterCount: characters,
+      estimatedCostCents,
+      model: config.model
+    };
+  }
+
+  /**
+   * Analyze token usage for file uploads
+   */
+  async analyzeFileTokens(fileId: string): Promise<{
+    fileId: string;
+    filename: string;
+    extractedTextLength: number;
+    estimatedTokens: number;
+    estimatedCostCents: number;
+    processingStatus: string;
+    aiStatus: string;
+    recommendations: string;
+  }> {
+    const file = await fileService.getFileById(fileId);
+    if (!file) {
+      throw new Error('File not found');
+    }
+    
+    const tokenAnalysis = this.estimateTokensEnhanced(file.extracted_text || '');
+    
+    return {
+      fileId,
+      filename: file.original_filename,
+      extractedTextLength: file.extracted_text?.length || 0,
+      estimatedTokens: tokenAnalysis.estimatedTokens,
+      estimatedCostCents: tokenAnalysis.estimatedCostCents,
+      processingStatus: file.processing_status,
+      aiStatus: file.ai_status,
+      recommendations: this.getTokenRecommendations(tokenAnalysis.estimatedTokens)
+    };
+  }
+
+  /**
+   * Analyze tokens for multiple files
+   */
+  async analyzeBatchTokens(fileIds: string[]): Promise<{
+    totalFiles: number;
+    totalTokens: number;
+    totalCostCents: number;
+    averageTokensPerFile: number;
+    files: Array<{
+      fileId: string;
+      filename: string;
+      estimatedTokens: number;
+      estimatedCostCents: number;
+    }>;
+  }> {
+    const analyses = await Promise.all(
+      fileIds.map(id => this.analyzeFileTokens(id))
+    );
+    
+    const totalTokens = analyses.reduce((sum, analysis) => sum + analysis.estimatedTokens, 0);
+    const totalCostCents = analyses.reduce((sum, analysis) => sum + analysis.estimatedCostCents, 0);
+    
+    return {
+      totalFiles: analyses.length,
+      totalTokens,
+      totalCostCents,
+      averageTokensPerFile: Math.round(totalTokens / analyses.length),
+      files: analyses.map(analysis => ({
+        fileId: analysis.fileId,
+        filename: analysis.filename,
+        estimatedTokens: analysis.estimatedTokens,
+        estimatedCostCents: analysis.estimatedCostCents
+      }))
+    };
+  }
+
+  /**
+   * Get token usage recommendations
+   */
+  private getTokenRecommendations(estimatedTokens: number): string {
+    const config = this.getConfig();
+    const maxTokens = config.maxTokens;
+    
+    if (estimatedTokens <= maxTokens * 0.5) {
+      return "Low token usage - safe for processing";
+    } else if (estimatedTokens <= maxTokens * 0.8) {
+      return "Moderate token usage - within safe limits";
+    } else if (estimatedTokens <= maxTokens) {
+      return "High token usage - approaching limit";
+    } else {
+      return "Exceeds token limit - consider truncating text";
+    }
+  }
+
+  /**
+   * Get token statistics
+   */
+  async getTokenStats(): Promise<{
+    totalFiles: number;
+    totalTokens: number;
+    totalCostCents: number;
+    averageTokensPerFile: number;
+    tokenDistribution: {
+      low: number;
+      moderate: number;
+      high: number;
+      excessive: number;
+    };
+  }> {
+    const query = `
+      SELECT 
+        COUNT(*) as total_files,
+        COALESCE(SUM(estimated_tokens), 0) as total_tokens,
+        COALESCE(SUM(estimated_cost_cents), 0) as total_cost_cents,
+        COALESCE(AVG(estimated_tokens), 0) as avg_tokens
+      FROM files 
+      WHERE extracted_text IS NOT NULL
+    `;
+
+    const result = await this.pool.query(query);
+    const stats = result.rows[0];
+    
+    // Get token distribution
+    const distributionQuery = `
+      SELECT 
+        COUNT(CASE WHEN estimated_tokens <= 1000 THEN 1 END) as low,
+        COUNT(CASE WHEN estimated_tokens > 1000 AND estimated_tokens <= 3000 THEN 1 END) as moderate,
+        COUNT(CASE WHEN estimated_tokens > 3000 AND estimated_tokens <= 6000 THEN 1 END) as high,
+        COUNT(CASE WHEN estimated_tokens > 6000 THEN 1 END) as excessive
+      FROM files 
+      WHERE extracted_text IS NOT NULL
+    `;
+
+    const distributionResult = await this.pool.query(distributionQuery);
+    const distribution = distributionResult.rows[0];
+
+    return {
+      totalFiles: parseInt(stats.total_files),
+      totalTokens: parseInt(stats.total_tokens),
+      totalCostCents: parseInt(stats.total_cost_cents),
+      averageTokensPerFile: Math.round(parseFloat(stats.avg_tokens)),
+      tokenDistribution: {
+        low: parseInt(distribution.low),
+        moderate: parseInt(distribution.moderate),
+        high: parseInt(distribution.high),
+        excessive: parseInt(distribution.excessive)
+      }
+    };
   }
 
   /**

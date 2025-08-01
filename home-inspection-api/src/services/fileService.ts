@@ -17,6 +17,9 @@ export interface FileRecord {
   ai_cost_cents?: number;
   ai_processed_at?: Date;
   ai_status?: string;
+  // Token estimation fields
+  estimated_tokens?: number;
+  estimated_cost_cents?: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -37,7 +40,7 @@ export class FileService {
     const query = `
       INSERT INTO files (filename, original_filename, stored_filename, mime_type, file_path, size)
       VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, filename, original_filename, stored_filename, mime_type, file_path, size, processing_status, extracted_text, error_message, ai_summary, ai_recommendations, ai_cost_cents, ai_processed_at, ai_status, created_at, updated_at
+      RETURNING id, filename, original_filename, stored_filename, mime_type, file_path, size, processing_status, extracted_text, error_message, ai_summary, ai_recommendations, ai_cost_cents, ai_processed_at, ai_status, estimated_tokens, estimated_cost_cents, created_at, updated_at
     `;
 
     const result = await pool.query(query, [filename, original_filename, stored_filename, mime_type, file_path, size]);
@@ -46,7 +49,7 @@ export class FileService {
 
   async getAllFiles(): Promise<FileRecord[]> {
     const query = `
-      SELECT id, filename, original_filename, stored_filename, mime_type, file_path, size, processing_status, extracted_text, error_message, ai_summary, ai_recommendations, ai_cost_cents, ai_processed_at, ai_status, created_at, updated_at
+      SELECT id, filename, original_filename, stored_filename, mime_type, file_path, size, processing_status, extracted_text, error_message, ai_summary, ai_recommendations, ai_cost_cents, ai_processed_at, ai_status, estimated_tokens, estimated_cost_cents, created_at, updated_at
       FROM files
       ORDER BY created_at DESC
     `;
@@ -57,7 +60,7 @@ export class FileService {
 
   async getFileById(id: string): Promise<FileRecord | null> {
     const query = `
-      SELECT id, filename, original_filename, stored_filename, mime_type, file_path, size, processing_status, extracted_text, error_message, ai_summary, ai_recommendations, ai_cost_cents, ai_processed_at, ai_status, created_at, updated_at
+      SELECT id, filename, original_filename, stored_filename, mime_type, file_path, size, processing_status, extracted_text, error_message, ai_summary, ai_recommendations, ai_cost_cents, ai_processed_at, ai_status, estimated_tokens, estimated_cost_cents, created_at, updated_at
       FROM files
       WHERE id = $1
     `;
@@ -124,6 +127,57 @@ export class FileService {
       WHERE id = $2
     `;
     await pool.query(query, [text, id]);
+  }
+
+  /**
+   * Update extracted text with token estimation
+   */
+  async updateExtractedTextWithTokens(id: string, text: string, estimatedTokens: number, estimatedCostCents: number): Promise<void> {
+    const query = `
+      UPDATE files 
+      SET extracted_text = $1, estimated_tokens = $2, estimated_cost_cents = $3, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = $4
+    `;
+    await pool.query(query, [text, estimatedTokens, estimatedCostCents, id]);
+  }
+
+  /**
+   * Update token estimation for a file
+   */
+  async updateTokenEstimation(id: string, estimatedTokens: number, estimatedCostCents: number): Promise<void> {
+    const query = `
+      UPDATE files 
+      SET estimated_tokens = $1, estimated_cost_cents = $2, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = $3
+    `;
+    await pool.query(query, [estimatedTokens, estimatedCostCents, id]);
+  }
+
+  /**
+   * Get files with token statistics
+   */
+  async getFilesWithTokenStats(): Promise<Array<FileRecord & { tokenStats: { totalTokens: number; totalCostCents: number; averageTokens: number } }>> {
+    const query = `
+      SELECT 
+        f.*,
+        COUNT(*) OVER() as total_files,
+        SUM(estimated_tokens) OVER() as total_tokens,
+        SUM(estimated_cost_cents) OVER() as total_cost_cents,
+        AVG(estimated_tokens) OVER() as average_tokens
+      FROM files f
+      WHERE extracted_text IS NOT NULL
+      ORDER BY created_at DESC
+    `;
+    
+    const result = await pool.query(query);
+    return result.rows.map(row => ({
+      ...row,
+      tokenStats: {
+        totalTokens: parseInt(row.total_tokens) || 0,
+        totalCostCents: parseInt(row.total_cost_cents) || 0,
+        averageTokens: Math.round(parseFloat(row.average_tokens) || 0)
+      }
+    }));
   }
 }
 

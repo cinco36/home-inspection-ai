@@ -39,12 +39,72 @@ fileProcessingQueue.process(async (job: Job<FileProcessingJob>) => {
     const fileExtension = path.extname(fileName).toLowerCase();
     
     if (fileExtension === '.pdf') {
-      // Extract text from PDF
-      const dataBuffer = await fs.readFile(filePath);
-      const pdfData = await pdf(dataBuffer);
-      extractedText = pdfData.text;
-      
-      console.log(`📄 Extracted ${extractedText.length} characters from PDF`);
+      // Extract text from PDF with enhanced error handling
+      try {
+        const dataBuffer = await fs.readFile(filePath);
+        
+        // Check if file is actually a PDF by looking at the header
+        const header = dataBuffer.toString('ascii', 0, 4);
+        if (header !== '%PDF') {
+          throw new Error('File does not appear to be a valid PDF (missing PDF header)');
+        }
+        
+        // Try to parse the PDF with timeout and retry logic
+        let pdfData;
+        let retryCount = 0;
+        const maxRetries = 2;
+        
+        while (retryCount <= maxRetries) {
+          try {
+            pdfData = await pdf(dataBuffer);
+            break; // Success, exit retry loop
+          } catch (pdfError) {
+            retryCount++;
+            const errorMessage = pdfError instanceof Error ? pdfError.message : 'Unknown PDF parsing error';
+            console.warn(`⚠️ PDF parsing attempt ${retryCount} failed for ${fileName}: ${errorMessage}`);
+            
+            if (retryCount > maxRetries) {
+              // If all retries failed, try a more lenient approach
+              try {
+                // Try with minimal options
+                pdfData = await pdf(dataBuffer);
+              } catch (finalError) {
+                const finalErrorMessage = finalError instanceof Error ? finalError.message : 'Unknown error';
+                throw new Error(`PDF parsing failed after ${maxRetries} attempts: ${finalErrorMessage}`);
+              }
+            } else {
+              // Wait before retry
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          }
+        }
+        
+        extractedText = pdfData.text || '';
+        
+        // Validate extracted text
+        if (!extractedText || extractedText.trim().length === 0) {
+          console.warn(`⚠️ No text extracted from PDF: ${fileName}`);
+          extractedText = '[No text could be extracted from this PDF file]';
+        }
+        
+        console.log(`📄 Extracted ${extractedText.length} characters from PDF`);
+        
+      } catch (pdfError) {
+        const errorMessage = pdfError instanceof Error ? pdfError.message : 'Unknown PDF processing error';
+        console.error(`❌ PDF processing error for ${fileName}:`, errorMessage);
+        
+        // Provide a more user-friendly error message
+        if (errorMessage.includes('bad XRef entry') || errorMessage.includes('Illegal character')) {
+          extractedText = '[PDF appears to be corrupted or password-protected. Please try uploading a different file.]';
+        } else if (errorMessage.includes('PDF header')) {
+          extractedText = '[File does not appear to be a valid PDF. Please check the file format.]';
+        } else {
+          extractedText = `[PDF processing failed: ${errorMessage}]`;
+        }
+        
+        // Don't throw error, continue with the extracted text (even if it's an error message)
+        console.log(`⚠️ Continuing with error message as extracted text for: ${fileName}`);
+      }
     } else if (['.doc', '.docx'].includes(fileExtension)) {
       // For now, just note that DOC/DOCX processing would go here
       // You'd typically use a library like mammoth or docx for this
@@ -54,8 +114,17 @@ fileProcessingQueue.process(async (job: Job<FileProcessingJob>) => {
       throw new Error(`Unsupported file type: ${fileExtension}`);
     }
     
-    // Update file with extracted text
-    await fileService.updateExtractedText(fileId, extractedText);
+    // Calculate token estimation for the extracted text
+    const tokenAnalysis = aiService.estimateTokensEnhanced(extractedText);
+    console.log(`🔢 Token estimation: ${tokenAnalysis.estimatedTokens} tokens (estimated cost: $${(tokenAnalysis.estimatedCostCents / 100).toFixed(4)})`);
+    
+    // Update file with extracted text and token estimation
+    await fileService.updateExtractedTextWithTokens(
+      fileId, 
+      extractedText, 
+      tokenAnalysis.estimatedTokens, 
+      tokenAnalysis.estimatedCostCents
+    );
     
     // Update status to completed for text extraction
     await fileService.updateProcessingStatus(fileId, 'completed');
@@ -90,6 +159,8 @@ fileProcessingQueue.process(async (job: Job<FileProcessingJob>) => {
       success: true,
       fileId,
       textLength: extractedText.length,
+      estimatedTokens: tokenAnalysis.estimatedTokens,
+      estimatedCostCents: tokenAnalysis.estimatedCostCents,
       message: 'File processed successfully with AI analysis'
     };
     

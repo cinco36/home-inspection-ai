@@ -134,6 +134,13 @@ const FileDetails: React.FC<FileDetailsProps> = ({ file, open, onClose }) => {
     return `$${(cents / 100).toFixed(2)}`;
   };
 
+  const formatTokens = (tokens: number) => {
+    if (tokens >= 1000) {
+      return `${(tokens / 1000).toFixed(1)}k tokens`;
+    }
+    return `${tokens} tokens`;
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
@@ -264,6 +271,27 @@ const FileDetails: React.FC<FileDetailsProps> = ({ file, open, onClose }) => {
                     {file.ai_cost_cents ? formatCost(file.ai_cost_cents) : 'N/A'}
                   </Typography>
                 </Grid>
+                {/* Token Estimation Fields */}
+                {file.estimated_tokens && (
+                  <>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Estimated Tokens
+                      </Typography>
+                      <Typography variant="body1" color="primary">
+                        {formatTokens(file.estimated_tokens)}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Estimated Cost
+                      </Typography>
+                      <Typography variant="body1" color="primary">
+                        {file.estimated_cost_cents ? formatCost(file.estimated_cost_cents) : 'N/A'}
+                      </Typography>
+                    </Grid>
+                  </>
+                )}
                 <Grid item xs={6}>
                   <Typography variant="body2" color="text.secondary">
                     Uploaded
@@ -399,6 +427,16 @@ const FileDetails: React.FC<FileDetailsProps> = ({ file, open, onClose }) => {
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6">
                   Extracted Text
+                  {file.estimated_tokens && (
+                    <Typography 
+                      component="span" 
+                      variant="body2" 
+                      color="text.secondary" 
+                      sx={{ ml: 1, fontWeight: 'normal' }}
+                    >
+                      ({formatTokens(file.estimated_tokens)})
+                    </Typography>
+                  )}
                 </Typography>
                 <Button
                   startIcon={<Download />}

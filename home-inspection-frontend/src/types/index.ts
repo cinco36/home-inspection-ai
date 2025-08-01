@@ -13,6 +13,9 @@ export interface FileData {
   ai_cost_cents?: number;
   ai_processed_at?: string;
   ai_status?: 'pending' | 'processing' | 'completed' | 'failed';
+  // Token estimation fields
+  estimated_tokens?: number;
+  estimated_cost_cents?: number;
   created_at: string;
   updated_at: string;
 }
@@ -33,6 +36,9 @@ export interface FileText {
   ai_cost_cents?: number;
   ai_processed_at?: string;
   ai_status?: 'pending' | 'processing' | 'completed' | 'failed';
+  // Token estimation fields
+  estimated_tokens?: number;
+  estimated_cost_cents?: number;
 }
 
 export interface UploadResponse {
@@ -45,4 +51,41 @@ export interface ApiResponse<T> {
   success: boolean;
   data: T;
   error?: string;
+}
+
+export interface TokenAnalysis {
+  estimatedTokens: number;
+  textLength: number;
+  wordCount: number;
+  characterCount: number;
+  estimatedCostCents: number;
+  model: string;
+  maxAllowedTokens: number;
+  withinLimit: boolean;
+}
+
+export interface BatchTokenAnalysis {
+  totalFiles: number;
+  totalTokens: number;
+  totalCostCents: number;
+  averageTokensPerFile: number;
+  files: Array<{
+    fileId: string;
+    filename: string;
+    estimatedTokens: number;
+    estimatedCostCents: number;
+  }>;
+}
+
+export interface TokenStats {
+  totalFiles: number;
+  totalTokens: number;
+  totalCostCents: number;
+  averageTokensPerFile: number;
+  tokenDistribution: {
+    low: number;
+    moderate: number;
+    high: number;
+    excessive: number;
+  };
 } 

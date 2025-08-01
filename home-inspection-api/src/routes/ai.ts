@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import aiService from '../services/aiService';
+import { promptManager } from "../config/prompts";
 import fileService from '../services/fileService';
 
 const router = Router();
@@ -288,5 +289,336 @@ router.post('/estimate-tokens', async (req, res) => {
   }
 });
 
-export default router; 
+/**
+ * Enhanced token estimation for text
+ * POST /api/v1/ai/estimate-tokens-enhanced
+ */
+router.post('/estimate-tokens-enhanced', async (req, res) => {
+  try {
+    const { text } = req.body;
 
+    if (!text) {
+      return res.status(400).json({
+        success: false,
+        error: 'text is required',
+      });
+    }
+
+    const tokenAnalysis = aiService.estimateTokensEnhanced(text);
+    const config = aiService.getConfig();
+    
+    res.json({
+      success: true,
+      data: {
+        ...tokenAnalysis,
+        maxAllowedTokens: config.maxTokens,
+        withinLimit: tokenAnalysis.estimatedTokens <= config.maxTokens,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
+ * Analyze tokens for a specific file
+ * GET /api/v1/ai/analyze-file/:fileId
+ */
+router.get('/analyze-file/:fileId', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+
+    if (!fileId) {
+      return res.status(400).json({
+        success: false,
+        error: 'fileId is required',
+      });
+    }
+
+    const analysis = await aiService.analyzeFileTokens(fileId);
+    
+    res.json({
+      success: true,
+      data: analysis,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
+ * Analyze tokens for multiple files
+ * POST /api/v1/ai/analyze-batch
+ */
+router.post('/analyze-batch', async (req, res) => {
+  try {
+    const { fileIds } = req.body;
+
+    if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'fileIds array is required',
+      });
+    }
+
+    const analysis = await aiService.analyzeBatchTokens(fileIds);
+    
+    res.json({
+      success: true,
+      data: analysis,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
+ * Get token statistics
+ * GET /api/v1/ai/token-stats
+ */
+router.get('/token-stats', async (req, res) => {
+  try {
+    const stats = await aiService.getTokenStats();
+    
+    res.json({
+      success: true,
+      data: stats,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * Prompt Management Endpoints
+ */
+
+/**
+ * Get current prompts
+ * GET /api/v1/ai/prompts
+ */
+router.get("/prompts", async (req, res) => {
+  try {
+    const currentPrompts = promptManager.getCurrentPrompts();
+    const stats = promptManager.getPromptStats();
+    
+    res.json({
+      success: true,
+      data: {
+        currentVersion: stats.currentVersion,
+        prompts: currentPrompts,
+        stats,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * Get prompts for a specific version
+ * GET /api/v1/ai/prompts/:version
+ */
+router.get("/prompts/:version", async (req, res) => {
+  try {
+    const { version } = req.params;
+    
+    const prompts = promptManager.getPromptsForVersion(version);
+    
+    if (!prompts) {
+      return res.status(404).json({
+        success: false,
+        error: `Prompt version ${version} not found`,
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        version,
+        prompts,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * Get available prompt versions
+ * GET /api/v1/ai/prompts/versions/available
+ */
+router.get("/prompts/versions/available", async (req, res) => {
+  try {
+    const versions = promptManager.getAvailableVersions();
+    const stats = promptManager.getPromptStats();
+    
+    res.json({
+      success: true,
+      data: {
+        versions,
+        currentVersion: stats.currentVersion,
+        totalVersions: stats.totalVersions,
+        customPrompts: stats.customPrompts,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * Set current prompt version
+ * POST /api/v1/ai/prompts/version
+ */
+router.post("/prompts/version", async (req, res) => {
+  try {
+    const { version } = req.body;
+    
+    if (!version) {
+      return res.status(400).json({
+        success: false,
+        error: "version is required",
+      });
+    }
+    
+    const success = promptManager.setCurrentVersion(version);
+    
+    if (!success) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid prompt version: ${version}`,
+      });
+    }
+    
+    const currentPrompts = promptManager.getCurrentPrompts();
+    
+    res.json({
+      success: true,
+      data: {
+        message: `Prompt version set to ${version}`,
+        currentVersion: version,
+        prompts: currentPrompts,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * Add custom prompt
+ * POST /api/v1/ai/prompts/custom
+ */
+router.post("/prompts/custom", async (req, res) => {
+  try {
+    const { name, prompt } = req.body;
+    
+    if (!name || !prompt) {
+      return res.status(400).json({
+        success: false,
+        error: "name and prompt are required",
+      });
+    }
+    
+    promptManager.addCustomPrompt(name, prompt);
+    
+    res.json({
+      success: true,
+      data: {
+        message: `Custom prompt ${name} added successfully`,
+        name,
+        prompt,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * Get custom prompts
+ * GET /api/v1/ai/prompts/custom
+ */
+router.get("/prompts/custom", async (req, res) => {
+  try {
+    const customPrompts = promptManager.getCustomPrompts();
+    const promptsArray = Array.from(customPrompts.entries()).map(([name, prompt]) => ({
+      name,
+      prompt,
+    }));
+    
+    res.json({
+      success: true,
+      data: {
+        customPrompts: promptsArray,
+        totalCustomPrompts: promptsArray.length,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * Remove custom prompt
+ * DELETE /api/v1/ai/prompts/custom/:name
+ */
+router.delete("/prompts/custom/:name", async (req, res) => {
+  try {
+    const { name } = req.params;
+    
+    const success = promptManager.removeCustomPrompt(name);
+    
+    if (!success) {
+      return res.status(404).json({
+        success: false,
+        error: `Custom prompt ${name} not found`,
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        message: `Custom prompt ${name} removed successfully`,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+export default router;
