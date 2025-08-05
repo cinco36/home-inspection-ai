@@ -16,6 +16,20 @@ CREATE TABLE IF NOT EXISTS files (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create text_chunks table for simplified chunking system
+CREATE TABLE IF NOT EXISTS text_chunks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    file_id UUID REFERENCES files(id) ON DELETE CASCADE,
+    chunk_index INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    start_position INTEGER NOT NULL,
+    end_position INTEGER NOT NULL,
+    overlap_with_previous INTEGER DEFAULT 0,
+    overlap_with_next INTEGER DEFAULT 0,
+    word_count INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create ai_requests table
 CREATE TABLE IF NOT EXISTS ai_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -37,6 +51,11 @@ CREATE INDEX IF NOT EXISTS idx_files_filename ON files(filename);
 
 -- Create index on created_at for sorting
 CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at);
+
+-- Create indexes for text_chunks table
+CREATE INDEX IF NOT EXISTS idx_text_chunks_file_id ON text_chunks(file_id);
+CREATE INDEX IF NOT EXISTS idx_text_chunks_chunk_index ON text_chunks(chunk_index);
+CREATE INDEX IF NOT EXISTS idx_text_chunks_created_at ON text_chunks(created_at);
 
 -- Create indexes for ai_requests table
 CREATE INDEX IF NOT EXISTS idx_ai_requests_file_id ON ai_requests(file_id);

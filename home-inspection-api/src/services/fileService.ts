@@ -37,14 +37,22 @@ export class FileService {
     async createFile(fileData: CreateFileRequest): Promise<FileRecord> {
     const { filename, original_filename, stored_filename, mime_type, file_path, size } = fileData;
 
+    console.log('📝 Creating file record in database:', { filename, size });
+
     const query = `
       INSERT INTO files (filename, original_filename, stored_filename, mime_type, file_path, size)
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING id, filename, original_filename, stored_filename, mime_type, file_path, size, processing_status, extracted_text, error_message, ai_summary, ai_recommendations, ai_cost_cents, ai_processed_at, ai_status, estimated_tokens, estimated_cost_cents, created_at, updated_at
     `;
 
-    const result = await pool.query(query, [filename, original_filename, stored_filename, mime_type, file_path, size]);
-    return result.rows[0];
+    try {
+      const result = await pool.query(query, [filename, original_filename, stored_filename, mime_type, file_path, size]);
+      console.log('✅ File record created successfully:', result.rows[0].id);
+      return result.rows[0];
+    } catch (error) {
+      console.error('❌ Database error creating file record:', error);
+      throw new Error(`Failed to create file record: ${error instanceof Error ? error.message : 'Unknown database error'}`);
+    }
   }
 
   async getAllFiles(): Promise<FileRecord[]> {

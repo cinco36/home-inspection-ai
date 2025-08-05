@@ -1,6 +1,6 @@
 {
   "name": "home-inspection-api",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "main": "dist/index.js",
   "scripts": {
     "dev": "nodemon --watch src --exec ts-node src/index.ts",
