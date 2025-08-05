@@ -2,4 +2,9 @@ node_modules/
 dist/
 .env
 .env.*
-*.log 
+*.log
+uploads/
+.pids*
+*.sql
+test-*.txt
+test-*.pdf 
